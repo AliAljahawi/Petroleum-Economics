@@ -7,13 +7,15 @@ def extract_prt_data(file_path):
         lines = file.readlines()
 
     data = []
+    opening_data = []
 
-    for i in range(len(lines) - 3):
+    for i in range(len(lines) - 1):
+        # Extract Closing Connections (existing logic)
         if "@--Message at" in lines[i] and "@ Closing connection" in lines[i + 1]:
             days_match = re.search(r"@--Message at (\d+\.\d+) Days\s+([\d]+ \w+ \d{4})", lines[i])
             conn_match = re.search(r"@ Closing connection \((\d+),\s*(\d+),\s*(\d+)\) in well (\S+)", lines[i + 1])
-            var_match = re.search(r"@ well (.+?) is above limit", lines[i + 2])
-            limit_match = re.search(r"@ Value is ([\d\.]+), limit is ([\d\.]+)", lines[i + 3])
+            var_match = re.search(r"@ well (.+?) is above limit", lines[i + 2]) if i + 2 < len(lines) else None
+            limit_match = re.search(r"@ Value is ([\d\.]+), limit is ([\d\.]+)", lines[i + 3]) if i + 3 < len(lines) else None
 
             if days_match and conn_match and var_match and limit_match:
                 days, date = days_match.groups()
@@ -21,18 +23,45 @@ def extract_prt_data(file_path):
                 variable = var_match.group(1)
                 value, limit = limit_match.groups()
 
-                data.append([float(days), date, well, variable, float(value), float(limit)])
+                data.append([float(days), date, well, variable, float(value), float(limit), "Closing"])
 
-    return pd.DataFrame(data, columns=["Days", "Date", "Well", "Variable", "Value", "Limit"])
+        # Extract Opening Connections (new logic)
+        elif "@--Message at" in lines[i] and "@ Opening connection" in lines[i + 1]:
+            days_match = re.search(r"@--Message at (\d+\.\d+) Days\s+([\d]+ \w+ \d{4})", lines[i])
+            opening_match = re.search(r"@ Opening connection (\d+) in well (\S+)", lines[i + 1])
 
-def compute_connections_per_well(df):
-    df["Year"] = pd.to_datetime(df["Date"], format="%d %b %Y").dt.year
-    return df.groupby(["Year", "Well"]).size().reset_index(name="Closed_Connections")
+            if days_match and opening_match:
+                days, date = days_match.groups()
+                conn_id, well = opening_match.groups()
+                opening_data.append([float(days), date, well, conn_id, "Opening"])
 
-def compute_workovers_per_year(df):
-    df_filtered = df[
-        ((df["Year"] < 2027) & (df["Closed_Connections"] > 3)) |
-        ((df["Year"] >= 2027) & (df["Closed_Connections"] > 2))
+    # Combine closing and opening data
+    closing_df = pd.DataFrame(data, columns=["Days", "Date", "Well", "Variable", "Value", "Limit", "Event"])
+    opening_df = pd.DataFrame(opening_data, columns=["Days", "Date", "Well", "Connection_ID", "Event"])
+
+    return closing_df, opening_df
+
+def compute_connections_per_well(df_closing, df_opening):
+    # Process Closing Connections
+    df_closing["Year"] = pd.to_datetime(df_closing["Date"], format="%d %b %Y").dt.year
+    closing_counts = df_closing.groupby(["Year", "Well"]).size().reset_index(name="Closed_Connections")
+
+    # Process Opening Connections
+    df_opening["Year"] = pd.to_datetime(df_opening["Date"], format="%d %b %Y").dt.year
+    opening_counts = df_opening.groupby(["Year", "Well"]).size().reset_index(name="Opened_Connections")
+
+    # Merge both DataFrames
+    merged_df = pd.merge(closing_counts, opening_counts, on=["Year", "Well"], how="outer").fillna(0)
+    merged_df["Closed_Connections"] = merged_df["Closed_Connections"].astype(int)
+    merged_df["Opened_Connections"] = merged_df["Opened_Connections"].astype(int)
+
+    return merged_df
+
+def compute_workovers_per_year(df_connections):
+    df_connections["Total_Connections"] = df_connections["Closed_Connections"] + df_connections["Opened_Connections"]
+    df_filtered = df_connections[
+        ((df_connections["Year"] < 2027) & (df_connections["Total_Connections"] > 3)) |
+        ((df_connections["Year"] >= 2027) & (df_connections["Total_Connections"] > 2))
     ]
     return df_filtered.groupby("Year").size().reset_index(name="Workover (Perf or Shut-off)")
 
@@ -101,21 +130,22 @@ def process_all_prt_files(root_dir):
                 print(f"Processing file: {file_path}")
 
                 base_name = os.path.splitext(file)[0]
-                output_filename = os.path.join(subdir, f"{base_name}_Drilling_Workover_Schedule.xlsx")
+                output_filename = os.path.join(subdir, f"{base_name}_summary.xlsx")
 
-                df_extracted = extract_prt_data(file_path)
-                if df_extracted.empty:
+                df_closing, df_opening = extract_prt_data(file_path)
+                if df_closing.empty and df_opening.empty:
                     print(f"Skipping {file} (no matching data found)")
                     continue
 
-                df_connections_per_well = compute_connections_per_well(df_extracted)
+                df_connections_per_well = compute_connections_per_well(df_closing, df_opening)
                 df_workovers_per_year = compute_workovers_per_year(df_connections_per_well)
                 df_adjusted_workovers = enforce_max_workover(df_workovers_per_year)
                 df_final_structure = generate_final_dataframe(df_adjusted_workovers, file)
 
                 with pd.ExcelWriter(output_filename) as writer:
                     df_final_structure.to_excel(writer, sheet_name="Final Structured Data", index=False)
-                    df_extracted.to_excel(writer, sheet_name="Raw Extracted Data", index=False)
+                    df_closing.to_excel(writer, sheet_name="Raw Closing Connections", index=False)
+                    df_opening.to_excel(writer, sheet_name="Raw Opening Connections", index=False)
                     df_connections_per_well.to_excel(writer, sheet_name="Connections per Well per Year", index=False)
                     df_workovers_per_year.to_excel(writer, sheet_name="Raw Workovers per Year", index=False)
                     df_adjusted_workovers.to_excel(writer, sheet_name="Final Workovers per Year", index=False)
