@@ -180,8 +180,8 @@ with tab1:
             fig, ax = plt.subplots()
             Year = df["Year"]
             revenue = df["Total Revenue MM$"]
-            opex = -df["Total OPEX MM$"]
-            capex = -df["Total CAPEX MM$"]
+            opex = -df["Escalated OPEX MM$"]
+            capex = -df["Escalated CAPEX MM$"]
 
             ax.bar(Year, revenue, label="Revenue", color="green")
             ax.bar(Year, opex, label="OPEX", color="blue")
