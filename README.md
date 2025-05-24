@@ -13,11 +13,11 @@ Scripts and Documentation
 
 File	Description
 
-Prod_Data_Prep.py	Processes simulation data to calculate yearly production changes for oil, condensate, and gas following specific business rules
+1_Prod_Data_Prep.py	Processes simulation data to calculate yearly production changes for oil, condensate, and gas following specific business rules
 
-PRT_File_Processor.py	analyzes well connection events from .PRT files to determine workover operations and generate drilling schedules
+2_Multiple_Workover_Extraction.py	analyzes well connection events from .PRT files to determine workover operations and generate drilling schedules
 
-eco_app_test.py	Streamlit application for economic evaluation of oil and gas projects with sensitivity analysis capabilities
+3_Eco_App.py	Streamlit application for economic evaluation of oil and gas projects with sensitivity analysis capabilities
 
 Detailed documentation for each script is available in these files:
 1.	1_Prod_Data_Prep_Documentation.docx - Details the production data preparation process and business rules
