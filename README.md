@@ -13,6 +13,8 @@ Scripts and Documentation
 
 File	Description
 
+Please note that the code description and documentation are AI-generated.
+
 1_Prod_Data_Prep.py	Processes simulation data to calculate yearly production changes for oil, condensate, and gas following specific business rules
 
 2_Multiple_Workover_Extraction.py	analyzes well connection events from .PRT files to determine workover operations and generate drilling schedules
