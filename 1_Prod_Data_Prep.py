@@ -42,16 +42,25 @@ def calculate_yearly_changes_and_save(data):
         df["Oil"] = df["OPT"].diff()  # Compute yearly OPT change
         df["Condensate"] = 0  # Add Condensate column with zero values
         
-        # Check if run name contains "BDPRODUCERS"
-        if "BDPRODUCERS" in run.upper():  # Case-insensitive check
+        # Extract the target year from the run name (e.g., 2027, 2029, 2032)
+        target_year = None
+        if "2027" in run:
+            target_year = 2027
+        elif "2029" in run:
+            target_year = 2029
+        elif "2032" in run:
+            target_year = 2032
+        
+        # Check if run name contains "BDPRODUCERS" and has a target_year
+        if "BDPRODUCERS" in run.upper() and target_year is not None:
             df["Gas"] = df["GPT"].diff()  # Compute yearly GPT change
-            # Set Gas to zero for years 2024-2028, keep calculated values for 2029+
+            # Set Gas to zero for years before target_year, keep calculated values for target_year+
             df["Gas"] = df.apply(
-                lambda row: 0 if 2024 <= row["Year"] - 1 <= 2028 else row["Gas"],
+                lambda row: 0 if row["Year"] - 1 < target_year else row["Gas"],
                 axis=1
             )
         else:
-            df["Gas"] = 0  # Entire Gas column is zero if no "BDPRODUCERS" in run name
+            df["Gas"] = 0  # Entire Gas column is zero if no "BDPRODUCERS" or no target_year
         
         df.dropna(inplace=True)  # Remove NaN for first row
         
